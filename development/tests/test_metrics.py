@@ -1,5 +1,5 @@
-from fris.agents.document_processing_agent import PageText, text_quality_issue
-from fris.agents.metrics_extraction_agent import extract_metrics, select_primary_statement_pages
+from fris.agents.agent_01_document_processing import PageText, text_quality_issue
+from fris.agents.agent_02_metrics_extraction import extract_metrics, select_primary_statement_pages
 
 
 def test_extracts_metrics_with_page_evidence() -> None:

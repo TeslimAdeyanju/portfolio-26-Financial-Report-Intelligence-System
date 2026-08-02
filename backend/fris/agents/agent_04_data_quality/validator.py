@@ -38,6 +38,7 @@ def validate_financials(
     results: list[ValidationResult] = []
     income = statements.get("income_statement")
     balance = statements.get("balance_sheet")
+    cash_flow = statements.get("cash_flow_statement")
 
     if balance:
         for period in balance.periods:
@@ -52,6 +53,18 @@ def validate_financials(
                         "total_assets = total_liabilities + total_equity",
                         assets,
                         liabilities + equity,
+                    )
+                )
+
+            combined_total = _value(balance, "total_liabilities_and_equity", period)
+            if assets is not None and combined_total is not None:
+                results.append(
+                    _validation(
+                        "balance_sheet_total",
+                        period,
+                        "total_assets = total_liabilities_and_equity",
+                        assets,
+                        combined_total,
                     )
                 )
 
@@ -83,6 +96,36 @@ def validate_financials(
                         "gross_profit = revenue - cost_of_revenue",
                         gross_profit,
                         revenue - cost,
+                    )
+                )
+    if cash_flow:
+        for period in cash_flow.periods:
+            beginning = _value(cash_flow, "beginning_cash", period)
+            ending = _value(cash_flow, "ending_cash", period)
+            change = _value(cash_flow, "net_change_in_cash", period)
+            if None not in (beginning, ending, change):
+                results.append(
+                    _validation(
+                        "cash_rollforward",
+                        period,
+                        "ending_cash = beginning_cash + net_change_in_cash",
+                        ending,
+                        beginning + change,
+                    )
+                )
+
+            operating = _value(cash_flow, "operating_cash_flow", period)
+            investing = _value(cash_flow, "investing_cash_flow", period)
+            financing = _value(cash_flow, "financing_cash_flow", period)
+            foreign_exchange = _value(cash_flow, "foreign_exchange_effect", period)
+            if None not in (change, operating, investing, financing, foreign_exchange):
+                results.append(
+                    _validation(
+                        "cash_flow_reconciliation",
+                        period,
+                        "net_change_in_cash = operating + investing + financing + foreign_exchange",
+                        change,
+                        operating + investing + financing + foreign_exchange,
                     )
                 )
     return results

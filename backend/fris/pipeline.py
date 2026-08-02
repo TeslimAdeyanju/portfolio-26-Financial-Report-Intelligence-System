@@ -4,19 +4,19 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .agents.data_quality_agent import validate_financials
-from .agents.document_processing_agent import (
+from .agents.agent_04_data_quality import validate_financials
+from .agents.agent_01_document_processing import (
     extract_pdf,
     extract_statement_pages_with_ocr,
     text_quality_issue,
 )
-from .agents.metrics_extraction_agent import (
+from .agents.agent_02_metrics_extraction import (
     extract_metrics,
     extract_statements,
     select_primary_statement_pages,
 )
-from .agents.narrative_synthesis_agent import generate_summary
-from .agents.financial_calculation_engine import calculate_period_ratios, calculate_ratios
+from .agents.agent_09_narrative_synthesis import generate_summary
+from .agents.agent_03_financial_calculation_engine import calculate_period_ratios, calculate_ratios
 from .models import AnalysisResult, Metric
 
 
@@ -39,7 +39,7 @@ def _latest_metrics(statements):
         statement = statements.get(statement_name)
         if not statement or row_name not in statement.rows:
             continue
-        period = statement.periods[0]
+        period = max(statement.periods, key=lambda value: int(value) if value.isdigit() else value)
         row = statement.rows[row_name]
         value = row.values.get(period)
         if value is not None:
@@ -68,7 +68,11 @@ class FinancialReportPipeline:
         statements = extract_statements(statement_pages)
         metrics = _latest_metrics(statements) or extract_metrics(statement_pages)
         period_ratios = calculate_period_ratios(statements)
-        latest_period = next(iter(period_ratios), None)
+        latest_period = (
+            max(period_ratios, key=lambda value: int(value) if value.isdigit() else value)
+            if period_ratios
+            else None
+        )
         ratios = period_ratios.get(latest_period, {}) if latest_period else calculate_ratios(metrics)
         validations = validate_financials(statements, period_ratios)
         if not metrics:

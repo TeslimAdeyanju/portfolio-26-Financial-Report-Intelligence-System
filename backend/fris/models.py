@@ -34,6 +34,8 @@ class StatementRow:
     name: str
     values: dict[str, float]
     evidence: Evidence
+    label: str = ""
+    section: str | None = None
 
 
 @dataclass(frozen=True)
@@ -45,6 +47,7 @@ class FinancialStatement:
     unit: str
     unit_scale: int
     page: int
+    sections: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

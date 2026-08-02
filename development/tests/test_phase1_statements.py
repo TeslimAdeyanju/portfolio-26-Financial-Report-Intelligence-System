@@ -1,10 +1,10 @@
-from fris.agents.data_quality_agent import validate_financials
-from fris.agents.document_processing_agent import PageText
-from fris.agents.metrics_extraction_agent import (
+from fris.agents.agent_04_data_quality import validate_financials
+from fris.agents.agent_01_document_processing import PageText
+from fris.agents.agent_02_metrics_extraction import (
     extract_statements,
     select_primary_statement_pages,
 )
-from fris.agents.financial_calculation_engine import calculate_period_ratios
+from fris.agents.agent_03_financial_calculation_engine import calculate_period_ratios
 
 
 def _apple_statement_pages() -> list[PageText]:

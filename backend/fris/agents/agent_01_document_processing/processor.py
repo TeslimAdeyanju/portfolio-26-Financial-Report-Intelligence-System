@@ -118,6 +118,8 @@ _PRIMARY_STATEMENT_MARKERS = (
     "consolidatedstatementsofoperations",
     "consolidatedstatementofoperations",
     "incomestatement",
+    "consolidatedstatementsofincome",
+    "consolidatedstatementofincome",
     "statementofprofitorloss",
     "consolidatedbalancesheets",
     "consolidatedbalancesheet",

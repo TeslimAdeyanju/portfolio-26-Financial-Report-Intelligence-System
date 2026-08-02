@@ -47,18 +47,18 @@ The system is designed to:
 
 The platform is organised into specialised agents, each responsible for a focused financial task.
 
-| Agent | Responsibility |
-| --- | --- |
-| Document Processing Agent | Extract text, tables, and financial statements from PDF, Excel, and PowerPoint files |
-| Metrics Extraction Agent | Identify and structure financial metrics from reports |
-| Financial Calculation Engine | Calculate financial ratios, KPIs, and trends using Python |
-| Data Quality Agent | Validate extracted information and detect inconsistencies |
-| Financial Analysis Agent | Analyse trends, variances, and business performance |
-| Insight Generation Agent | Explain the business meaning behind financial movements |
-| Risk Assessment Agent | Identify financial, operational, and reporting risks |
-| Visual Blueprint Agent | Generate Power BI dashboard specifications and semantic models |
-| Narrative Synthesis Agent | Produce executive summaries and management reports |
-| Export Agent | Export results to JSON, CSV, Excel, Power BI-ready tables, PDF, and other destinations |
+| Order | Agent | Package | Responsibility |
+| ---: | --- | --- | --- |
+| 1 | Document Processing Agent | `agent_01_document_processing` | Extract text, tables, and financial statements from PDF, Excel, and PowerPoint files |
+| 2 | Metrics Extraction Agent | `agent_02_metrics_extraction` | Identify and structure financial metrics from reports |
+| 3 | Financial Calculation Engine | `agent_03_financial_calculation_engine` | Calculate financial ratios, KPIs, and trends using Python |
+| 4 | Data Quality Agent | `agent_04_data_quality` | Validate extracted information and detect inconsistencies |
+| 5 | Financial Analysis Agent | `agent_05_financial_analysis` | Analyse trends, variances, and business performance |
+| 6 | Insight Generation Agent | `agent_06_insight_generation` | Explain the business meaning behind financial movements |
+| 7 | Risk Assessment Agent | `agent_07_risk_assessment` | Identify financial, operational, and reporting risks |
+| 8 | Visual Blueprint Agent | `agent_08_visual_blueprint` | Generate Power BI dashboard specifications and semantic models |
+| 9 | Narrative Synthesis Agent | `agent_09_narrative_synthesis` | Produce executive summaries and management reports |
+| 10 | Export Agent | `agent_10_export` | Export results to JSON, CSV, Excel, Power BI-ready tables, PDF, and other destinations |
 
 ## Technology Stack
 
@@ -185,17 +185,107 @@ with `brew install tesseract` on macOS or through your operating system's packag
 
 - Reporting-period extraction for multi-column statements
 - Currency and unit-scale recognition (units, thousands, millions, and billions)
-- Structured income statement, balance sheet, and cash flow statement rows
+- Complete structured income statement, balance sheet, and cash flow statement rows,
+  including labels not previously known to the system
 - Page-level evidence for every extracted row
 - Two-pass OCR: low-resolution page classification followed by detailed statement OCR
 - Accounting equation, gross-profit, and current-ratio validation
 - Multi-period margins, liquidity, debt, efficiency, return, cash flow, and EPS metrics
 - JSON export of statements, calculations, validations, evidence, and warnings
 
+## Extraction Development Checkpoint
+
+The current extraction pipeline uses PyMuPDF, Tesseract OCR, deterministic Python table
+parsing, canonical financial mappings, and validation rules. Complete-row extraction has
+been tested against Apple, Amazon, and Colgate reports. The next extraction milestone is to
+add model-assisted visual table reconstruction for unfamiliar or ambiguous layouts.
+
+### Recommended models
+
+| Model | Proposed responsibility | Deployment |
+| --- | --- | --- |
+| GLM-OCR | Primary visual table recognition, layout reconstruction, OCR, and structured row extraction | Local through Ollama |
+| Qwen3-VL 8B | Financial label interpretation, period alignment, canonical mapping, and visual verification | Local through Ollama |
+
+If only one model is introduced initially, start with **GLM-OCR** because the immediate
+problem is accurate document and table reconstruction. Add **Qwen3-VL 8B** as the semantic
+verification layer after the GLM-OCR integration is stable.
+
+Install the proposed local models with:
+
+```bash
+ollama pull glm-ocr
+ollama pull qwen3-vl:8b
+```
+
+### Proposed hybrid extraction flow
+
+```text
+PDF page
+  → embedded text or Tesseract OCR
+  → deterministic table parser
+  → completeness and confidence assessment
+  → GLM-OCR visual table reconstruction when required
+  → Qwen3-VL financial interpretation and alignment when required
+  → deterministic Python calculations
+  → Data Quality Agent validation
+  → human review when validation fails
+```
+
+Models must not silently replace validated figures or perform authoritative calculations.
+Every model-assisted row must retain its exact source label, statement section, period,
+numeric value, currency, unit, PDF page, evidence, extraction method, and confidence score.
+
+### Where to continue next
+
+1. Add a model-provider interface under the Metrics Extraction Agent.
+2. Add an Ollama client with configurable model names and timeouts.
+3. Render candidate statement pages to images for GLM-OCR.
+4. Define a strict JSON schema for model-produced statement rows.
+5. Trigger model assistance only for incomplete, low-confidence, or failed-validation rows.
+6. Use Qwen3-VL to normalize and verify ambiguous labels and period columns.
+7. Re-run deterministic accounting and cash-flow validations after model assistance.
+8. Display extraction method and confidence in Streamlit for human approval.
+9. Benchmark deterministic-only and model-assisted results across all sample reports.
+
+This is the current stopping point for extraction development.
+
+## Development Update - 2 August 2026
+
+Today’s work strengthened the financial-statement extraction foundation and made the project
+easier to continue in a future development session.
+
+### Completed today
+
+- Replaced the limited KPI allowlist as the primary extractor with complete-row statement
+  extraction that preserves exact PDF labels, sections, periods, values, ordering, and evidence.
+- Corrected cash-flow and balance-sheet extraction across different annual-report layouts.
+- Added Amazon and Colgate annual reports alongside Apple as regression samples.
+- Visually compared extracted tables with rendered source pages.
+- Expanded deterministic validation to include balance-sheet totals, cash rollforwards, and
+  operating + investing + financing + foreign-exchange reconciliations.
+- Improved Streamlit statement inspection with exact labels, section names, row counts,
+  formatted amounts, larger tables, and consistent ratio formatting.
+- Numbered the agent packages from `agent_01_...` through `agent_10_...` so their intended
+  workflow order is visible in the repository.
+- Documented the next model-assisted extraction milestone using GLM-OCR for visual table
+  reconstruction and Qwen3-VL 8B for financial interpretation and verification.
+
+### Validation snapshot
+
+| Report | Income rows | Balance-sheet rows | Cash-flow rows | Reconciliations |
+| --- | ---: | ---: | ---: | ---: |
+| Apple | 19 | 27 | 33 | 12/12 passed |
+| Amazon | 23 | 26 | 29 | 10/10 passed |
+| Colgate | 17 | 31 | 33 | 15/15 passed |
+
+The automated suite contains 11 passing tests. The next session should begin with the
+GLM-OCR provider interface described in **Where to continue next** above.
+
 ## Milestone: Phase 1 Complete
 
-Phase 1 was completed and validated against the included 80-page Apple 2022 Form 10-K.
-The production pipeline automatically detected corrupt embedded PDF text, classified the
+Phase 1 was completed and validated against the included Apple, Amazon, and Colgate annual
+reports. The Apple pipeline automatically detected corrupt embedded PDF text, classified the
 document at low resolution, and applied detailed OCR only to the primary statements.
 
 ### Verified extraction
@@ -223,10 +313,17 @@ document at low resolution, and applied detailed OCR only to the primary stateme
 | Free cash flow | $111,443 million |
 | Basic / diluted EPS | $6.15 / $6.11 |
 
-All seven available accounting-equation, gross-profit, and current-ratio validation checks
-passed. The complete automated suite contains nine passing tests. Full two-pass OCR and
-analysis of the sample report completes in approximately 50 seconds on the development
-machine.
+### Cross-report extraction coverage
+
+| Sample | Income rows | Balance-sheet rows | Cash-flow rows | Checks passed |
+| --- | ---: | ---: | ---: | ---: |
+| Apple 2022 Form 10-K | 19 | 27 | 33 | 12/12 |
+| Amazon 2025 Annual Report | 23 | 26 | 29 | 10/10 |
+| Colgate 2025 Annual Report | 17 | 31 | 33 | 15/15 |
+
+The complete automated suite contains 11 passing tests. Full two-pass Apple OCR and analysis
+completes in approximately 48 seconds on the development machine; text-native Amazon and
+Colgate reports complete in approximately one second each.
 
 ### Agent implementation status
 
@@ -286,16 +383,16 @@ machine.
 financial-report-intelligence-system/
 ├── backend/fris/                  # Application package
 │   ├── agents/                    # One folder per agent responsibility
-│   │   ├── document_processing_agent/
-│   │   ├── metrics_extraction_agent/
-│   │   ├── financial_calculation_engine/
-│   │   ├── data_quality_agent/
-│   │   ├── financial_analysis_agent/
-│   │   ├── insight_generation_agent/
-│   │   ├── risk_assessment_agent/
-│   │   ├── visual_blueprint_agent/
-│   │   ├── narrative_synthesis_agent/
-│   │   └── export_agent/
+│   │   ├── agent_01_document_processing/
+│   │   ├── agent_02_metrics_extraction/
+│   │   ├── agent_03_financial_calculation_engine/
+│   │   ├── agent_04_data_quality/
+│   │   ├── agent_05_financial_analysis/
+│   │   ├── agent_06_insight_generation/
+│   │   ├── agent_07_risk_assessment/
+│   │   ├── agent_08_visual_blueprint/
+│   │   ├── agent_09_narrative_synthesis/
+│   │   └── agent_10_export/
 │   ├── models.py
 │   └── pipeline.py
 ├── development/

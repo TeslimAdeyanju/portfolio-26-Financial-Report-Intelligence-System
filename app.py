@@ -9,6 +9,29 @@ import streamlit as st
 from fris import FinancialReportPipeline
 
 
+def format_financial_value(value: float) -> str:
+    """Format statement amounts for display without changing stored numeric data."""
+    absolute = abs(value)
+    formatted = f"{absolute:,.0f}" if value == int(value) else f"{absolute:,.2f}"
+    return f"({formatted})" if value < 0 else formatted
+
+
+def format_ratio_value(name: str, value: float) -> str:
+    if name in {"working_capital", "free_cash_flow"}:
+        return format_financial_value(value)
+    if name in {
+        "gross_margin",
+        "operating_margin",
+        "net_margin",
+        "return_on_assets",
+        "return_on_equity",
+    }:
+        return f"{value:,.2f}%"
+    if name in {"basic_eps", "diluted_eps"}:
+        return f"{value:,.2f}"
+    return f"{value:,.2f}x"
+
+
 st.set_page_config(page_title="CoreInsight FRIS", page_icon="📊", layout="wide")
 st.title("CoreInsight Financial Report Intelligence")
 st.caption("Upload a financial PDF to extract structured, traceable statements and ratios.")
@@ -40,14 +63,24 @@ if payload := st.session_state.get("analysis"):
         for statement_name, statement in payload.get("statements", {}).items():
             st.markdown(
                 f"**{statement_name.replace('_', ' ').title()}** — "
-                f"{statement['currency']} in {statement['unit']} (page {statement['page']})"
+                f"{statement['currency']} in {statement['unit']} · "
+                f"page {statement['page']} · {len(statement['rows'])} rows"
             )
             st.dataframe(
                 [
-                    {"row": row_name, **row["values"]}
+                    {
+                        "section": row.get("section") or "",
+                        "row": row.get("label") or row_name,
+                        **{
+                            period: format_financial_value(value)
+                            for period, value in row["values"].items()
+                        },
+                    }
                     for row_name, row in statement["rows"].items()
                 ],
-                use_container_width=True,
+                width="stretch",
+                hide_index=True,
+                height=min(1_000, 38 * (len(statement["rows"]) + 1)),
             )
     with ratio_tab:
         ratio_rows = []
@@ -57,17 +90,17 @@ if payload := st.session_state.get("analysis"):
                     {
                         "period": period,
                         "metric": ratio_name,
-                        "value": item["value"],
+                        "value": format_ratio_value(ratio_name, item["value"]),
                         "formula": item["formula"],
                     }
                 )
-        st.dataframe(ratio_rows, use_container_width=True)
+        st.dataframe(ratio_rows, width="stretch", hide_index=True)
     with validation_tab:
         validations = payload.get("validations", [])
         if validations:
             passed = sum(item["passed"] for item in validations)
             st.metric("Checks passed", f"{passed}/{len(validations)}")
-            st.dataframe(validations, use_container_width=True)
+            st.dataframe(validations, width="stretch", hide_index=True)
         else:
             st.info("No financial validation checks could be completed.")
     with evidence_tab:

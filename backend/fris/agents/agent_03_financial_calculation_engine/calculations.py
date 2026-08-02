@@ -101,9 +101,8 @@ def calculate_period_ratios(
             )
 
         if balance and period in balance.periods:
-            index = balance.periods.index(period)
-            if index + 1 < len(balance.periods):
-                prior_period = balance.periods[index + 1]
+            prior_period = str(int(period) - 1) if period.isdigit() else ""
+            if prior_period in balance.periods:
                 prior_assets = _statement_value(statements, "balance_sheet", "total_assets", prior_period)
                 prior_equity = _statement_value(statements, "balance_sheet", "total_equity", prior_period)
                 average_assets = (

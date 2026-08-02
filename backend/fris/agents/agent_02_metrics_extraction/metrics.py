@@ -6,7 +6,7 @@ import re
 from collections.abc import Iterable
 
 from ...models import Evidence, Metric
-from ..document_processing_agent.processor import PageText
+from ..agent_01_document_processing.processor import PageText
 
 
 METRIC_LABELS: dict[str, tuple[str, ...]] = {
@@ -74,6 +74,8 @@ _STATEMENT_HEADINGS = (
     "consolidated statements of operations",
     "consolidated statement of operations",
     "income statement",
+    "consolidated statements of income",
+    "consolidated statement of income",
     "statement of profit or loss",
     "consolidated balance sheets",
     "consolidated balance sheet",
@@ -83,6 +85,11 @@ _STATEMENT_HEADINGS = (
     "cash flow statement",
 )
 
+_TOP_OF_PAGE_MARKERS = tuple(
+    "".join(character for character in heading if character.isalnum())
+    for heading in _STATEMENT_HEADINGS
+)
+
 
 def select_primary_statement_pages(pages: Iterable[PageText]) -> list[PageText]:
     """Prefer audited primary statements over narrative metric mentions."""
@@ -90,6 +97,14 @@ def select_primary_statement_pages(pages: Iterable[PageText]) -> list[PageText]:
     selected = [
         page
         for page in page_list
-        if any(heading in page.text.lower() for heading in _STATEMENT_HEADINGS)
+        if any(
+            marker
+            in "".join(
+                character
+                for character in page.text[:500].casefold()
+                if character.isalnum()
+            )
+            for marker in _TOP_OF_PAGE_MARKERS
+        )
     ]
     return selected or page_list

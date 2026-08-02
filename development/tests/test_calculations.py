@@ -1,4 +1,4 @@
-from fris.agents.financial_calculation_engine import calculate_ratios
+from fris.agents.agent_03_financial_calculation_engine import calculate_ratios
 from fris.models import Metric
 
 
