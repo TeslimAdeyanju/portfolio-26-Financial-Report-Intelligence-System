@@ -32,6 +32,34 @@ def format_ratio_value(name: str, value: float) -> str:
     return f"{value:,.2f}x"
 
 
+def format_movement_value(item: dict, value: float) -> str:
+    if item["metric_type"] == "fact" or item["unit"] == "amount":
+        return format_financial_value(value)
+    if item["unit"] == "percentage_points":
+        return f"{value:,.2f}%"
+    return f"{value:,.2f}x"
+
+
+def format_movement_change(item: dict) -> str:
+    value = item["absolute_change"]
+    sign = "+" if value > 0 else ""
+    if item["metric_type"] == "fact" or item["unit"] == "amount":
+        return f"{sign}{format_financial_value(value)}"
+    if item["unit"] == "percentage_points":
+        return f"{sign}{value:,.2f} pp"
+    return f"{sign}{value:,.2f}x"
+
+
+def format_risk_value(item: dict) -> str:
+    value = item["observed_value"]
+    if item["unit"] in {"percentage", "percentage_points"}:
+        suffix = "%" if item["unit"] == "percentage" else " pp"
+        return f"{value:+,.2f}{suffix}"
+    if item["unit"] == "ratio":
+        return f"{value:,.2f}x"
+    return format_financial_value(value)
+
+
 st.set_page_config(page_title="CoreInsight FRIS", page_icon="📊", layout="wide")
 st.title("CoreInsight Financial Report Intelligence")
 st.caption("Upload a financial PDF to extract structured, traceable statements and ratios.")
@@ -82,8 +110,16 @@ if payload := st.session_state.get("analysis"):
     for statement in payload["summary"]:
         st.write(f"• {statement}")
 
-    fact_tab, statement_tab, ratio_tab, validation_tab, evidence_tab = st.tabs(
-        ["Key Financial Facts", "Full Statements", "Ratios", "Validation", "Evidence"]
+    fact_tab, analysis_tab, risk_tab, statement_tab, ratio_tab, validation_tab, evidence_tab = st.tabs(
+        [
+            "Key Financial Facts",
+            "Analysis",
+            "Risks",
+            "Full Statements",
+            "Ratios",
+            "Validation",
+            "Evidence",
+        ]
     )
     with fact_tab:
         facts = payload.get("financial_facts", {})
@@ -128,6 +164,74 @@ if payload := st.session_state.get("analysis"):
                         "reason": fact["reason"],
                     }
                     for name, fact in missing.items()
+                ],
+                width="stretch",
+                hide_index=True,
+            )
+    with analysis_tab:
+        movements = payload.get("financial_movements", [])
+        if not movements:
+            st.info("At least two comparable reporting periods are required for trend analysis.")
+        else:
+            favorable = sum(item["assessment"] == "favorable" for item in movements)
+            adverse = sum(item["assessment"] == "adverse" for item in movements)
+            contextual = sum(item["assessment"] == "contextual" for item in movements)
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Movements analysed", len(movements))
+            col2.metric("Favorable", favorable)
+            col3.metric("Adverse", adverse)
+            col4.metric("Contextual", contextual)
+            st.dataframe(
+                [
+                    {
+                        "category": item["category"],
+                        "metric": item["name"].replace("_", " ").title(),
+                        "comparison": f"{item['current_period']} vs {item['prior_period']}",
+                        "current": format_movement_value(item, item["current_value"]),
+                        "prior": format_movement_value(item, item["prior_value"]),
+                        "change": format_movement_change(item),
+                        "% change": (
+                            f"{item['percentage_change']:+,.2f}%"
+                            if item["percentage_change"] is not None
+                            else "n/m"
+                        ),
+                        "direction": item["direction"],
+                        "assessment": item["assessment"],
+                        "rationale": item["rationale"],
+                        "page": item["evidence"]["page"] if item.get("evidence") else "",
+                    }
+                    for item in movements
+                ],
+                width="stretch",
+                hide_index=True,
+            )
+    with risk_tab:
+        risks = payload.get("risk_findings", [])
+        if not risks:
+            st.success("No risks crossed the configured thresholds for the available facts.")
+        else:
+            high = sum(item["severity"] == "high" for item in risks)
+            medium = sum(item["severity"] == "medium" for item in risks)
+            low = sum(item["severity"] == "low" for item in risks)
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Risk findings", len(risks))
+            col2.metric("High", high)
+            col3.metric("Medium", medium)
+            col4.metric("Low", low)
+            st.dataframe(
+                [
+                    {
+                        "severity": item["severity"].upper(),
+                        "category": item["category"],
+                        "risk": item["title"],
+                        "period": item["period"],
+                        "observed": format_risk_value(item),
+                        "trigger": item["trigger"],
+                        "implication": item["implication"],
+                        "suggested action": item["suggested_action"],
+                        "page": item["evidence"]["page"] if item.get("evidence") else "",
+                    }
+                    for item in risks
                 ],
                 width="stretch",
                 hide_index=True,

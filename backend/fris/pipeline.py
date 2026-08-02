@@ -28,6 +28,8 @@ from .agents.agent_03_financial_calculation_engine import (
     calculate_ratios,
 )
 from .agents.agent_04_data_quality import validate_financials
+from .agents.agent_05_financial_analysis import analyze_financial_performance
+from .agents.agent_07_risk_assessment import assess_financial_risks
 from .agents.agent_09_narrative_synthesis import generate_summary
 from .models import AnalysisResult, Metric
 
@@ -176,12 +178,16 @@ class FinancialReportPipeline:
 
         metrics = _latest_metrics(statements) or extract_metrics(statement_pages)
         financial_facts = extract_financial_facts(statements)
+        financial_movements = analyze_financial_performance(financial_facts, period_ratios)
         latest_period = (
             max(period_ratios, key=lambda value: int(value) if value.isdigit() else value)
             if period_ratios
             else None
         )
         ratios = period_ratios.get(latest_period, {}) if latest_period else calculate_ratios(metrics)
+        risk_findings = assess_financial_risks(
+            financial_facts, period_ratios, financial_movements, validations
+        )
         if not metrics:
             warnings.append(
                 "No supported metrics were confidently extracted from the document text."
@@ -193,6 +199,8 @@ class FinancialReportPipeline:
             ratios=ratios,
             statements=statements,
             financial_facts=financial_facts,
+            financial_movements=financial_movements,
+            risk_findings=risk_findings,
             period_ratios=period_ratios,
             validations=validations,
             summary=generate_summary(metrics, ratios),

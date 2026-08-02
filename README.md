@@ -198,6 +198,10 @@ with `brew install tesseract` on macOS or through your operating system's packag
 - Stable 21-metric Key Financial Facts pack for cross-company analysis
 - Explicit missing-fact reasons instead of guessed or zero-filled values
 - Optional full-statement view for inspection and reconciliation
+- Adjacent-period amount, percentage, margin, liquidity, leverage, and cash-flow movements
+- Deterministic favorable, adverse, stable, turnaround, deterioration, and contextual assessments
+- Evidence-linked profitability, liquidity, solvency, cash-flow, performance, and reporting risk flags
+- Transparent severity thresholds, observed trigger values, implications, and suggested review actions
 
 ## Extraction Development Checkpoint
 
@@ -330,7 +334,7 @@ easier to continue in a future development session.
 | Amazon | 23 | 26 | 29 | 10/10 passed |
 | Colgate | 17 | 31 | 33 | 15/15 passed |
 
-The automated suite now contains 20 passing tests, including provider, table-normalization,
+The automated suite now contains 27 passing tests, including provider, table-normalization,
 page-rendering, provenance, and safe-fallback coverage. Live Colgate model-assisted extraction
 processed the three primary statements in 419 seconds on the 8 GB M2 and retained 17 income,
 31 balance-sheet, and 33 cash-flow rows with all 15 validations passing.
@@ -380,7 +384,7 @@ and the two-page `Statements of cash flows`; selected Group rather than Company 
 returned 17/21 canonical facts in approximately 0.35 seconds without model assistance. Missing
 facts remained explicit rather than being inferred from narrative notes.
 
-The complete automated suite contains 20 passing tests. Full two-pass Apple OCR and analysis
+The complete automated suite contains 27 passing tests. Full two-pass Apple OCR and analysis
 completes in approximately 48 seconds on the development machine; text-native Amazon and
 Colgate reports complete in approximately one second each.
 
@@ -392,9 +396,9 @@ Colgate reports complete in approximately one second each.
 | Metrics Extraction Agent | Implemented |
 | Financial Calculation Engine | Implemented |
 | Data Quality Agent | Implemented |
-| Financial Analysis Agent | Planned folder ready |
+| Financial Analysis Agent | Implemented |
 | Insight Generation Agent | Planned folder ready |
-| Risk Assessment Agent | Planned folder ready |
+| Risk Assessment Agent | Implemented |
 | Visual Blueprint Agent | Planned folder ready |
 | Narrative Synthesis Agent | Baseline implemented |
 | Export Agent | JSON available; additional formats planned |
@@ -409,6 +413,8 @@ Colgate reports complete in approximately one second each.
 - Financial equation validation ✅
 - Targeted OCR fallback ✅
 - Executive summary ✅
+- Multi-period trend and variance analysis ✅
+- Evidence-linked financial risk assessment ✅
 - JSON export ✅
 
 ### Version 2

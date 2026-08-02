@@ -71,6 +71,41 @@ class FinancialFact:
 
 
 @dataclass(frozen=True)
+class FinancialMovement:
+    name: str
+    category: str
+    metric_type: str
+    current_period: str
+    prior_period: str
+    current_value: float
+    prior_value: float
+    absolute_change: float
+    percentage_change: float | None
+    direction: str
+    assessment: str
+    rationale: str
+    currency: str = "unknown"
+    unit: str = "units"
+    evidence: Evidence | None = None
+
+
+@dataclass(frozen=True)
+class RiskFinding:
+    code: str
+    title: str
+    category: str
+    severity: str
+    period: str
+    metric: str
+    observed_value: float
+    trigger: str
+    implication: str
+    suggested_action: str
+    unit: str = "units"
+    evidence: Evidence | None = None
+
+
+@dataclass(frozen=True)
 class ValidationResult:
     name: str
     period: str
@@ -89,6 +124,8 @@ class AnalysisResult:
     ratios: dict[str, Ratio] = field(default_factory=dict)
     statements: dict[str, FinancialStatement] = field(default_factory=dict)
     financial_facts: dict[str, FinancialFact] = field(default_factory=dict)
+    financial_movements: list[FinancialMovement] = field(default_factory=list)
+    risk_findings: list[RiskFinding] = field(default_factory=list)
     period_ratios: dict[str, dict[str, Ratio]] = field(default_factory=dict)
     validations: list[ValidationResult] = field(default_factory=list)
     summary: list[str] = field(default_factory=list)
