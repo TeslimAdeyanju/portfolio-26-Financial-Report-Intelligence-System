@@ -41,28 +41,7 @@ The system is designed to:
 
 ## System Architecture
 
-```text
-                     Financial Report
-                             │
-                             ▼
-                  Document Processing Layer
-                             │
-                             ▼
-                Financial Intelligence Engine
-                             │
-      ┌──────────┬──────────┬──────────┬──────────┐
-      ▼          ▼          ▼          ▼
-   Metrics    Analysis     Risk      Insights
-                             │
-                             ▼
-                Financial Calculation Engine
-                             │
-                             ▼
-                  Narrative Generator
-                             │
-                             ▼
-                       Export Layer
-```
+![CoreInsight FRIS system architecture](docs/assets/workflow-pic.png)
 
 ## Multi-Agent Framework
 
@@ -189,15 +168,92 @@ This architecture enables multiple language models to be benchmarked using ident
 - Markdown
 - Power BI-ready tables
 
+## Quick Start
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r development/requirements.txt
+streamlit run app.py
+```
+
+Run the automated checks with `pytest`. Version 1 currently supports text-based PDFs;
+corrupt or image-only PDFs automatically use local Tesseract OCR. Install the OCR runtime
+with `brew install tesseract` on macOS or through your operating system's package manager.
+
+## Version 1 Capabilities
+
+- Reporting-period extraction for multi-column statements
+- Currency and unit-scale recognition (units, thousands, millions, and billions)
+- Structured income statement, balance sheet, and cash flow statement rows
+- Page-level evidence for every extracted row
+- Two-pass OCR: low-resolution page classification followed by detailed statement OCR
+- Accounting equation, gross-profit, and current-ratio validation
+- Multi-period margins, liquidity, debt, efficiency, return, cash flow, and EPS metrics
+- JSON export of statements, calculations, validations, evidence, and warnings
+
+## Milestone: Phase 1 Complete
+
+Phase 1 was completed and validated against the included 80-page Apple 2022 Form 10-K.
+The production pipeline automatically detected corrupt embedded PDF text, classified the
+document at low resolution, and applied detailed OCR only to the primary statements.
+
+### Verified extraction
+
+| Statement | Source page | Reporting periods | Currency and unit |
+| --- | ---: | --- | --- |
+| Consolidated statements of operations | 32 | 2022, 2021, 2020 | USD millions |
+| Consolidated balance sheets | 34 | 2022, 2021 | USD millions |
+| Consolidated statements of cash flows | 36 | 2022, 2021, 2020 | USD millions |
+
+### Verified 2022 calculations
+
+| KPI | Result |
+| --- | ---: |
+| Gross margin | 43.31% |
+| Operating margin | 30.29% |
+| Net margin | 25.31% |
+| Current ratio | 0.88x |
+| Working capital | $(18,577) million |
+| Debt-to-equity | 2.37x |
+| Debt ratio | 0.34x |
+| Asset turnover | 1.12x |
+| Return on average assets | 28.36% |
+| Return on average equity | 175.46% |
+| Free cash flow | $111,443 million |
+| Basic / diluted EPS | $6.15 / $6.11 |
+
+All seven available accounting-equation, gross-profit, and current-ratio validation checks
+passed. The complete automated suite contains nine passing tests. Full two-pass OCR and
+analysis of the sample report completes in approximately 50 seconds on the development
+machine.
+
+### Agent implementation status
+
+| Agent | Status |
+| --- | --- |
+| Document Processing Agent | Implemented |
+| Metrics Extraction Agent | Implemented |
+| Financial Calculation Engine | Implemented |
+| Data Quality Agent | Implemented |
+| Financial Analysis Agent | Planned folder ready |
+| Insight Generation Agent | Planned folder ready |
+| Risk Assessment Agent | Planned folder ready |
+| Visual Blueprint Agent | Planned folder ready |
+| Narrative Synthesis Agent | Baseline implemented |
+| Export Agent | JSON available; additional formats planned |
+
 ## Roadmap
 
 ### Version 1
 
-- PDF upload
-- Metrics extraction
-- Financial ratio calculation
-- Executive summary
-- JSON export
+- PDF upload ✅
+- Multi-period structured statement extraction ✅
+- Financial ratio and KPI calculation ✅
+- Financial equation validation ✅
+- Targeted OCR fallback ✅
+- Executive summary ✅
+- JSON export ✅
 
 ### Version 2
 
@@ -224,25 +280,42 @@ This architecture enables multiple language models to be benchmarked using ident
 - Financial knowledge graph
 - Personal AI financial research assistant
 
-## Proposed Repository Structure
+## Repository Structure
 
 ```text
 financial-report-intelligence-system/
+├── backend/fris/                  # Application package
+│   ├── agents/                    # One folder per agent responsibility
+│   │   ├── document_processing_agent/
+│   │   ├── metrics_extraction_agent/
+│   │   ├── financial_calculation_engine/
+│   │   ├── data_quality_agent/
+│   │   ├── financial_analysis_agent/
+│   │   ├── insight_generation_agent/
+│   │   ├── risk_assessment_agent/
+│   │   ├── visual_blueprint_agent/
+│   │   ├── narrative_synthesis_agent/
+│   │   └── export_agent/
+│   ├── models.py
+│   └── pipeline.py
+├── development/
+│   ├── tests/                     # Automated tests
+│   ├── tools/                     # Developer and maintenance tools
+│   └── requirements.txt           # Development dependencies
 ├── docs/
-├── backend/
-├── frontend/
-├── agents/
-├── models/
-├── prompts/
-├── financial_engine/
-├── exports/
-├── evaluation/
-├── tests/
-├── sample_reports/
-├── app.py
-├── requirements.txt
+│   ├── assets/
+│   └── architecture.md
+├── sample_reports/                # Local reports used for evaluation
+├── app.py                         # Streamlit entry point
+├── pyproject.toml                 # Python package configuration
+├── requirements.txt               # Runtime installation
 └── README.md
 ```
+
+Development-only tests, dependencies, and tools are consolidated under `development/`.
+Every responsibility in the Multi-Agent Framework has its own folder under
+`backend/fris/agents/`, including documented placeholders for planned agents. See each
+folder's `README.md` and `docs/architecture.md` for its status and extension boundary.
 
 ## Guiding Principles
 
