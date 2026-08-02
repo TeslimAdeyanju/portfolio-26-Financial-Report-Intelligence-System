@@ -205,18 +205,21 @@ add model-assisted visual table reconstruction for unfamiliar or ambiguous layou
 | Model | Proposed responsibility | Deployment |
 | --- | --- | --- |
 | GLM-OCR | Primary visual table recognition, layout reconstruction, OCR, and structured row extraction | Local through Ollama |
-| Qwen3-VL 8B | Financial label interpretation, period alignment, canonical mapping, and visual verification | Local through Ollama |
+| Qwen3-VL 8B | Optional financial label interpretation, period alignment, canonical mapping, and visual verification | Hosted GPU or a higher-memory development machine |
 
 If only one model is introduced initially, start with **GLM-OCR** because the immediate
 problem is accurate document and table reconstruction. Add **Qwen3-VL 8B** as the semantic
 verification layer after the GLM-OCR integration is stable.
 
-Install the proposed local models with:
+Install the primary local extraction model with:
 
 ```bash
-ollama pull glm-ocr
-ollama pull qwen3-vl:8b
+ollama pull glm-ocr:latest
 ```
+
+Qwen3-VL 8B is not recommended for the current 8 GB development machine. It remains an
+optional future verification model that can be hosted remotely or used on higher-memory
+hardware after the GLM-OCR integration is stable.
 
 ### Proposed hybrid extraction flow
 
@@ -249,6 +252,47 @@ numeric value, currency, unit, PDF page, evidence, extraction method, and confid
 9. Benchmark deterministic-only and model-assisted results across all sample reports.
 
 This is the current stopping point for extraction development.
+
+## Local AI Model Milestone - 2 August 2026
+
+The first model required for model-assisted extraction is now installed and verified on the
+development machine. This moves the project from model selection into implementation and
+benchmarking.
+
+### Verified environment
+
+| Component | Confirmed configuration |
+| --- | --- |
+| Development computer | Apple M2 with 8 GB unified memory |
+| Model storage | External `Bintu2TB07` drive through the existing Ollama model directory |
+| Ollama model | `glm-ocr:latest` (`6effedd0dc8a`) |
+| GLM-OCR size | 2.2 GB, F16 |
+| GLM-OCR architecture | 1.1B parameters, 131,072-token context |
+| Capabilities | Vision, completion, and tools |
+| Inference | Local Apple Metal, one financial-statement page at a time |
+
+The installed supporting text models are `phi3:mini`, `llama3.1:8b`, and
+`starcoder2:3b`. They are not document-vision substitutes for GLM-OCR. The intended local
+allocation is:
+
+- **GLM-OCR:** visual document, table, and statement extraction.
+- **Phi-3 Mini:** lightweight explanations and narrative synthesis from validated JSON.
+- **Llama 3.1 8B:** optional deeper text analysis, run separately because of memory limits.
+- **StarCoder2 3B:** optional Python, SQL, DAX, and dashboard-code assistance.
+
+The application will keep deterministic Python calculations and accounting validation as the
+authoritative layer. Language models may extract or explain evidence, but must not silently
+replace validated financial values.
+
+### Next implementation milestone
+
+1. Add an Ollama/GLM-OCR provider to Agent 01 - Document Processing.
+2. Add Ollama health checks and configurable extraction modes to Streamlit.
+3. Render and submit only relevant statement pages, sequentially, to fit within 8 GB memory.
+4. Convert GLM-OCR results into the existing structured-statement schema with source evidence.
+5. Fall back to the deterministic extractor when the model is unavailable.
+6. Benchmark rules-only and model-assisted extraction against Apple, Amazon, and Colgate.
+7. Re-run all accounting validations before displaying or exporting model-assisted figures.
 
 ## Development Update - 2 August 2026
 
