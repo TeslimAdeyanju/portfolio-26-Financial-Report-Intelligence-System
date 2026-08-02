@@ -6,7 +6,7 @@ import json
 
 import streamlit as st
 
-from fris import FinancialReportPipeline
+from fris import ExtractionMode, FinancialReportPipeline
 
 
 def format_financial_value(value: float) -> str:
@@ -36,17 +36,45 @@ st.set_page_config(page_title="CoreInsight FRIS", page_icon="📊", layout="wide
 st.title("CoreInsight Financial Report Intelligence")
 st.caption("Upload a financial PDF to extract structured, traceable statements and ratios.")
 
+mode_labels = {
+    "Automatic — use GLM-OCR only when rules are incomplete": ExtractionMode.AUTOMATIC.value,
+    "Model-assisted — run GLM-OCR on statement pages": ExtractionMode.MODEL_ASSISTED.value,
+    "Rules only — do not call a model": ExtractionMode.RULES_ONLY.value,
+}
+selected_mode_label = st.selectbox("Extraction mode", tuple(mode_labels))
+selected_mode = mode_labels[selected_mode_label]
+
+with st.expander("Local model settings"):
+    ollama_url = st.text_input("Ollama URL", value="http://127.0.0.1:11434")
+    model_name = st.text_input("Vision model", value="glm-ocr:latest")
+    if st.button("Check model connection"):
+        status = FinancialReportPipeline(
+            extraction_mode=selected_mode,
+            ollama_url=ollama_url,
+            model_name=model_name,
+        ).model_status()
+        (st.success if status.available else st.error)(status.detail)
+
 uploaded = st.file_uploader("Financial report", type=["pdf"])
 if uploaded and st.button("Analyse report", type="primary"):
     try:
         with st.spinner("Analysing report…"):
-            result = FinancialReportPipeline().analyze(uploaded.getvalue(), uploaded.name)
+            result = FinancialReportPipeline(
+                extraction_mode=selected_mode,
+                ollama_url=ollama_url,
+                model_name=model_name,
+            ).analyze(uploaded.getvalue(), uploaded.name)
         payload = result.to_dict()
         st.session_state["analysis"] = payload
     except Exception as exc:
         st.error(f"The report could not be analysed: {exc}")
 
 if payload := st.session_state.get("analysis"):
+    model_label = payload.get("model_used") or "not used"
+    st.caption(
+        f"Extraction mode: {payload.get('extraction_mode', 'rules_only')} · "
+        f"Model: {model_label}"
+    )
     for warning in payload["warnings"]:
         st.warning(warning)
 
@@ -54,9 +82,56 @@ if payload := st.session_state.get("analysis"):
     for statement in payload["summary"]:
         st.write(f"• {statement}")
 
-    statement_tab, ratio_tab, validation_tab, evidence_tab = st.tabs(
-        ["Statements", "Ratios", "Validation", "Evidence"]
+    fact_tab, statement_tab, ratio_tab, validation_tab, evidence_tab = st.tabs(
+        ["Key Financial Facts", "Full Statements", "Ratios", "Validation", "Evidence"]
     )
+    with fact_tab:
+        facts = payload.get("financial_facts", {})
+        reported = {name: fact for name, fact in facts.items() if fact["status"] == "reported"}
+        missing = {name: fact for name, fact in facts.items() if fact["status"] != "reported"}
+        st.metric("Facts available", f"{len(reported)}/{len(facts)}")
+        periods = sorted(
+            {period for fact in reported.values() for period in fact["values"]},
+            key=lambda value: int(value) if value.isdigit() else value,
+            reverse=True,
+        )
+        st.dataframe(
+            [
+                {
+                    "category": fact["category"],
+                    "metric": name.replace("_", " ").title(),
+                    "source label": fact["source_label"],
+                    **{
+                        period: (
+                            format_financial_value(fact["values"][period])
+                            if period in fact["values"]
+                            else ""
+                        )
+                        for period in periods
+                    },
+                    "currency / unit": f"{fact['currency']} {fact['unit']}",
+                    "page": fact["evidence"]["page"] if fact.get("evidence") else "",
+                    "method": fact["extraction_method"],
+                    "confidence": f"{fact['confidence']:.0%}",
+                }
+                for name, fact in reported.items()
+            ],
+            width="stretch",
+            hide_index=True,
+        )
+        with st.expander(f"Unavailable or non-separately-reported facts ({len(missing)})"):
+            st.dataframe(
+                [
+                    {
+                        "category": fact["category"],
+                        "metric": name.replace("_", " ").title(),
+                        "reason": fact["reason"],
+                    }
+                    for name, fact in missing.items()
+                ],
+                width="stretch",
+                hide_index=True,
+            )
     with statement_tab:
         if not payload.get("statements"):
             st.info("No structured statements were extracted.")
@@ -64,7 +139,8 @@ if payload := st.session_state.get("analysis"):
             st.markdown(
                 f"**{statement_name.replace('_', ' ').title()}** — "
                 f"{statement['currency']} in {statement['unit']} · "
-                f"page {statement['page']} · {len(statement['rows'])} rows"
+                f"page {statement['page']} · {len(statement['rows'])} rows · "
+                f"{statement.get('extraction_method', 'deterministic')}"
             )
             st.dataframe(
                 [
@@ -107,7 +183,11 @@ if payload := st.session_state.get("analysis"):
         st.json(
             {
                 statement_name: {
-                    row_name: row["evidence"]
+                    row_name: {
+                        "evidence": row["evidence"],
+                        "extraction_method": row.get("extraction_method", "deterministic"),
+                        "confidence": row.get("confidence", 1.0),
+                    }
                     for row_name, row in statement["rows"].items()
                 }
                 for statement_name, statement in payload.get("statements", {}).items()

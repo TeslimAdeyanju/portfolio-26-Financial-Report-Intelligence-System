@@ -1,5 +1,5 @@
 """CoreInsight Financial Report Intelligence System."""
 
-from .pipeline import FinancialReportPipeline
+from .pipeline import ExtractionMode, FinancialReportPipeline
 
-__all__ = ["FinancialReportPipeline"]
+__all__ = ["ExtractionMode", "FinancialReportPipeline"]

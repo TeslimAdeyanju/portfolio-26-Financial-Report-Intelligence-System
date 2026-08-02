@@ -192,6 +192,12 @@ with `brew install tesseract` on macOS or through your operating system's packag
 - Accounting equation, gross-profit, and current-ratio validation
 - Multi-period margins, liquidity, debt, efficiency, return, cash flow, and EPS metrics
 - JSON export of statements, calculations, validations, evidence, and warnings
+- Optional local GLM-OCR table reconstruction through Ollama
+- Automatic, model-assisted, and rules-only extraction modes
+- Per-row extraction method and confidence for model provenance
+- Stable 21-metric Key Financial Facts pack for cross-company analysis
+- Explicit missing-fact reasons instead of guessed or zero-filled values
+- Optional full-statement view for inspection and reconciliation
 
 ## Extraction Development Checkpoint
 
@@ -239,19 +245,18 @@ Models must not silently replace validated figures or perform authoritative calc
 Every model-assisted row must retain its exact source label, statement section, period,
 numeric value, currency, unit, PDF page, evidence, extraction method, and confidence score.
 
-### Where to continue next
+### Model-assisted extraction checklist
 
-1. Add a model-provider interface under the Metrics Extraction Agent.
-2. Add an Ollama client with configurable model names and timeouts.
-3. Render candidate statement pages to images for GLM-OCR.
-4. Define a strict JSON schema for model-produced statement rows.
-5. Trigger model assistance only for incomplete, low-confidence, or failed-validation rows.
-6. Use Qwen3-VL to normalize and verify ambiguous labels and period columns.
-7. Re-run deterministic accounting and cash-flow validations after model assistance.
-8. Display extraction method and confidence in Streamlit for human approval.
-9. Benchmark deterministic-only and model-assisted results across all sample reports.
-
-This is the current stopping point for extraction development.
+- [x] Add a model-provider interface under the Document Processing Agent.
+- [x] Add an Ollama client with configurable model names and timeouts.
+- [x] Render candidate statement pages to images for GLM-OCR.
+- [x] Normalize GLM-OCR HTML/Markdown tables into structured statement rows.
+- [x] Trigger automatic model assistance for incomplete or failed-validation statements.
+- [x] Re-run deterministic accounting and cash-flow validations after model assistance.
+- [x] Display extraction method and confidence in Streamlit for human approval.
+- [x] Complete a live deterministic-versus-model Colgate benchmark.
+- [ ] Benchmark live GLM-OCR output against Apple and Amazon.
+- [ ] Evaluate hosted semantic verification only if GLM-OCR ambiguity remains.
 
 ## Local AI Model Milestone - 2 August 2026
 
@@ -284,15 +289,17 @@ The application will keep deterministic Python calculations and accounting valid
 authoritative layer. Language models may extract or explain evidence, but must not silently
 replace validated financial values.
 
-### Next implementation milestone
+### Model integration completed
 
-1. Add an Ollama/GLM-OCR provider to Agent 01 - Document Processing.
-2. Add Ollama health checks and configurable extraction modes to Streamlit.
-3. Render and submit only relevant statement pages, sequentially, to fit within 8 GB memory.
-4. Convert GLM-OCR results into the existing structured-statement schema with source evidence.
-5. Fall back to the deterministic extractor when the model is unavailable.
-6. Benchmark rules-only and model-assisted extraction against Apple, Amazon, and Colgate.
-7. Re-run all accounting validations before displaying or exporting model-assisted figures.
+Agent 01 now includes an Ollama/GLM-OCR provider, health checks, sequential page rendering,
+HTML/Markdown table normalization, provenance, and safe deterministic fallback. Streamlit
+offers automatic, model-assisted, and rules-only modes and displays the model and extraction
+method used. Model-assisted figures are routed through the existing structured-statement
+schema, calculations, and accounting validation before display or export.
+
+The next implementation milestone is to benchmark live GLM-OCR output against Apple, Amazon,
+and Colgate, tune the page prompts and table normalization where required, and record
+deterministic-versus-model row accuracy and processing time.
 
 ## Development Update - 2 August 2026
 
@@ -323,8 +330,10 @@ easier to continue in a future development session.
 | Amazon | 23 | 26 | 29 | 10/10 passed |
 | Colgate | 17 | 31 | 33 | 15/15 passed |
 
-The automated suite contains 11 passing tests. The next session should begin with the
-GLM-OCR provider interface described in **Where to continue next** above.
+The automated suite now contains 20 passing tests, including provider, table-normalization,
+page-rendering, provenance, and safe-fallback coverage. Live Colgate model-assisted extraction
+processed the three primary statements in 419 seconds on the 8 GB M2 and retained 17 income,
+31 balance-sheet, and 33 cash-flow rows with all 15 validations passing.
 
 ## Milestone: Phase 1 Complete
 
@@ -365,7 +374,13 @@ document at low resolution, and applied detailed OCR only to the primary stateme
 | Amazon 2025 Annual Report | 23 | 26 | 29 | 10/10 |
 | Colgate 2025 Annual Report | 17 | 31 | 33 | 15/15 |
 
-The complete automated suite contains 11 passing tests. Full two-pass Apple OCR and analysis
+An external EE Limited FY2015 IFRS report was also validated against the Key Financial Facts
+workflow. The parser identified `Group income statement`, `Statements of financial position`,
+and the two-page `Statements of cash flows`; selected Group rather than Company columns; and
+returned 17/21 canonical facts in approximately 0.35 seconds without model assistance. Missing
+facts remained explicit rather than being inferred from narrative notes.
+
+The complete automated suite contains 20 passing tests. Full two-pass Apple OCR and analysis
 completes in approximately 48 seconds on the development machine; text-native Amazon and
 Colgate reports complete in approximately one second each.
 

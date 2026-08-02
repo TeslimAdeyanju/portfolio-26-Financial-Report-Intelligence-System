@@ -1,4 +1,8 @@
-from fris.agents.agent_01_document_processing import PageText, text_quality_issue
+from fris.agents.agent_01_document_processing import (
+    PageText,
+    is_primary_statement,
+    text_quality_issue,
+)
 from fris.agents.agent_02_metrics_extraction import extract_metrics, select_primary_statement_pages
 
 
@@ -56,3 +60,21 @@ def test_uses_total_current_assets_not_section_header() -> None:
 
     assert metrics["current_assets"].value == 135_405
     assert metrics["current_liabilities"].value == 153_982
+
+
+def test_statement_classifier_rejects_indexes_auditor_reports_and_notes() -> None:
+    assert is_primary_statement(
+        "COLGATE-PALMOLIVE COMPANY\nConsolidated Statements of Income\n2025 2024"
+    )
+    assert not is_primary_statement(
+        "Index to Financial Statements\nConsolidated Statements of Income 70\n"
+        "Consolidated Balance Sheets 72"
+    )
+    assert not is_primary_statement(
+        "Report of Independent Registered Public Accounting Firm\n"
+        "We audited the accompanying consolidated balance sheets"
+    )
+    assert not is_primary_statement(
+        "The effective tax rate reflected in the Consolidated Statements of Income "
+        "is as follows:"
+    )

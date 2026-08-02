@@ -16,6 +16,8 @@ def test_amazon_complete_primary_statements() -> None:
     assert result.statements["balance_sheet"].rows["cash_and_equivalents"].values["2025"] == 86_810
     assert result.statements["cash_flow_statement"].rows["operating_cash_flow"].values["2025"] == 139_514
     assert result.period_ratios["2025"]["free_cash_flow"].value == 7_695
+    assert result.financial_facts["revenue"].values["2025"] == 716_924
+    assert result.financial_facts["total_assets"].status == "reported"
 
 
 def test_colgate_complete_primary_statements() -> None:
@@ -29,3 +31,5 @@ def test_colgate_complete_primary_statements() -> None:
     assert result.statements["cash_flow_statement"].rows["ending_cash"].values["2025"] == 1_288
     assert result.period_ratios["2025"]["free_cash_flow"].value == 3_634
     assert all(validation.passed for validation in result.validations)
+    assert result.financial_facts["revenue"].source_label == "Net sales"
+    assert result.financial_facts["operating_cash_flow"].values["2025"] == 4_198

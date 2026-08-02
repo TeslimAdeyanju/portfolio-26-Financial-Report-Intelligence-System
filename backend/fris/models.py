@@ -36,6 +36,8 @@ class StatementRow:
     evidence: Evidence
     label: str = ""
     section: str | None = None
+    extraction_method: str = "deterministic"
+    confidence: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -48,6 +50,24 @@ class FinancialStatement:
     unit_scale: int
     page: int
     sections: tuple[str, ...] = ()
+    extraction_method: str = "deterministic"
+    confidence: float = 1.0
+
+
+@dataclass(frozen=True)
+class FinancialFact:
+    name: str
+    category: str
+    values: dict[str, float]
+    source_label: str = ""
+    currency: str = "unknown"
+    unit: str = "units"
+    unit_scale: int = 1
+    status: str = "reported"
+    reason: str | None = None
+    evidence: Evidence | None = None
+    extraction_method: str = "deterministic"
+    confidence: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -68,10 +88,13 @@ class AnalysisResult:
     metrics: dict[str, Metric] = field(default_factory=dict)
     ratios: dict[str, Ratio] = field(default_factory=dict)
     statements: dict[str, FinancialStatement] = field(default_factory=dict)
+    financial_facts: dict[str, FinancialFact] = field(default_factory=dict)
     period_ratios: dict[str, dict[str, Ratio]] = field(default_factory=dict)
     validations: list[ValidationResult] = field(default_factory=list)
     summary: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    extraction_mode: str = "rules_only"
+    model_used: str | None = None
     generated_at: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )

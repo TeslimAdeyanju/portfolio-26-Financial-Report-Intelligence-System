@@ -12,6 +12,8 @@ import shutil
 class PageText:
     number: int
     text: str
+    method: str = "embedded_text"
+    confidence: float = 1.0
 
 
 def extract_pdf(source: str | Path | bytes) -> list[PageText]:
@@ -107,6 +109,8 @@ def extract_pdf_with_ocr(
                 PageText(
                     number=index + 1,
                     text=page.get_text("text", textpage=text_page),
+                    method="tesseract_ocr",
+                    confidence=0.75,
                 )
             )
         return pages
@@ -124,19 +128,48 @@ _PRIMARY_STATEMENT_MARKERS = (
     "consolidatedbalancesheets",
     "consolidatedbalancesheet",
     "statementoffinancialposition",
+    "statementsoffinancialposition",
+    "groupincomestatement",
     "consolidatedstatementsofcashflows",
     "consolidatedstatementofcashflows",
     "cashflowstatement",
+    "statementsofcashflows",
 )
 
 
-def _is_primary_statement(text: str) -> bool:
-    # Audited statement titles appear at the top of a page. Limiting the search
-    # prevents notes that merely reference a statement from being misclassified.
-    normalized = "".join(
-        character for character in text[:500].lower() if character.isalnum()
-    )
-    return any(marker in normalized for marker in _PRIMARY_STATEMENT_MARKERS)
+def is_primary_statement(text: str) -> bool:
+    """Recognize an audited statement title without selecting indexes or notes."""
+    top = " ".join(text[:1_000].casefold().split())
+    if any(
+        phrase in top
+        for phrase in (
+            "index to financial statements",
+            "report of independent registered public accounting firm",
+            "independent auditor's report",
+            "independent auditor’s report",
+            "reflected in the consolidated statements",
+            "notes to consolidated financial statements",
+            "notes to the financial statements",
+        )
+    ):
+        return False
+
+    nonempty_lines = [line for line in text.splitlines() if line.strip()]
+    lines = [
+        "".join(character for character in line.casefold() if character.isalnum())
+        for line in nonempty_lines[:6]
+    ]
+    for line in lines:
+        for marker in _PRIMARY_STATEMENT_MARKERS:
+            position = line.find(marker)
+            if position < 0 or position > 80:
+                continue
+            suffix = line[position + len(marker) :]
+            if suffix.startswith("isasfollows"):
+                continue
+            if len(suffix) <= 100:
+                return True
+    return False
 
 
 def extract_statement_pages_with_ocr(
@@ -169,8 +202,15 @@ def extract_statement_pages_with_ocr(
                 tessdata=tessdata,
             )
             text = page.get_text("text", textpage=text_page)
-            classified_pages.append(PageText(number=index + 1, text=text))
-            if _is_primary_statement(text):
+            classified_pages.append(
+                PageText(
+                    number=index + 1,
+                    text=text,
+                    method="tesseract_classification",
+                    confidence=0.6,
+                )
+            )
+            if is_primary_statement(text):
                 selected_indexes.append(index)
 
         if not selected_indexes:
@@ -186,7 +226,12 @@ def extract_statement_pages_with_ocr(
                 tessdata=tessdata,
             )
             detailed_pages.append(
-                PageText(index + 1, page.get_text("text", textpage=text_page))
+                PageText(
+                    index + 1,
+                    page.get_text("text", textpage=text_page),
+                    method="tesseract_ocr",
+                    confidence=0.75,
+                )
             )
         return detailed_pages
     finally:

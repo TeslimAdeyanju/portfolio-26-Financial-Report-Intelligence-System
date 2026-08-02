@@ -19,16 +19,19 @@ _STATEMENT_MARKERS = {
         "consolidated statements of income",
         "consolidated statement of income",
         "statement of profit or loss",
+        "group income statement",
     ),
     "balance_sheet": (
         "consolidated balance sheets",
         "consolidated balance sheet",
         "statement of financial position",
+        "statements of financial position",
     ),
     "cash_flow_statement": (
         "consolidated statements of cash flows",
         "consolidated statement of cash flows",
         "cash flow statement",
+        "statements of cash flows",
     ),
 }
 
@@ -39,8 +42,18 @@ _ROW_ALIASES: dict[str, dict[str, tuple[str, ...]]] = {
         "gross_profit": ("gross margin", "gross profit"),
         "operating_expenses": ("total operating expenses",),
         "operating_income": ("operating income", "operating profit"),
-        "pretax_income": ("income before provision for income taxes", "profit before tax"),
-        "income_tax_expense": ("provision for income taxes", "income tax expense"),
+        "pretax_income": (
+            "income before provision for income taxes",
+            "profit before tax",
+            "profit/(loss) before tax",
+            "profit/(loss) before taxation",
+        ),
+        "income_tax_expense": (
+            "provision for income taxes",
+            "income tax expense",
+            "taxation",
+            "income tax",
+        ),
         "net_income": ("net income", "profit for the year"),
     },
     "balance_sheet": {
@@ -54,6 +67,7 @@ _ROW_ALIASES: dict[str, dict[str, tuple[str, ...]]] = {
             "total shareholders’ equity",
             "total stockholders' equity",
             "total equity",
+            "total net assets",
         ),
         "total_liabilities_and_equity": (
             "total liabilities and stockholders' equity",
@@ -66,12 +80,14 @@ _ROW_ALIASES: dict[str, dict[str, tuple[str, ...]]] = {
             "long-term debt",
             "short-term debt",
             "debt payable within one-year",
+            "interest bearing loans and borrowings",
         ),
     },
     "cash_flow_statement": {
         "beginning_cash": (
             "cash, cash equivalents and restricted cash, beginning balances",
             "cash and cash equivalents at beginning of year",
+            "cash and cash equivalents at the beginning of the year",
             "cash, cash equivalents, and restricted cash, beginning of period",
         ),
         "operating_cash_flow": (
@@ -79,12 +95,15 @@ _ROW_ALIASES: dict[str, dict[str, tuple[str, ...]]] = {
             "net cash provided by operating activities",
             "net cash provided by operations",
             "net cash provided by (used in) operating activities",
+            "net cash flows from operating activities",
         ),
         "capital_expenditure": (
             "payments for acquisition of property, plant and equipment",
             "purchases of property, plant and equipment",
             "purchases of property and equipment",
             "capital expenditures",
+            "purchase of property, plant and equipment",
+            "purchases of property, plant and equipment and intangible assets",
         ),
         "investing_cash_flow": (
             "cash used in investing activities",
@@ -99,6 +118,7 @@ _ROW_ALIASES: dict[str, dict[str, tuple[str, ...]]] = {
         "ending_cash": (
             "cash, cash equivalents and restricted cash, ending balances",
             "cash and cash equivalents at end of year",
+            "cash and cash equivalents at the end of the year",
             "cash, cash equivalents, and restricted cash, end of period",
         ),
         "net_change_in_cash": (
@@ -142,10 +162,12 @@ def _periods(lines: list[str]) -> tuple[str, ...]:
 
 
 def _statement_type(text: str) -> str | None:
-    normalized = _normalize(text)
-    for name, markers in _STATEMENT_MARKERS.items():
-        if any(marker in normalized for marker in markers):
-            return name
+    lines = [line for line in text.splitlines() if line.strip()][:8]
+    for line in lines:
+        normalized = _normalize(line)
+        for name, markers in _STATEMENT_MARKERS.items():
+            if any(marker in normalized for marker in markers):
+                return name
     return None
 
 
@@ -157,6 +179,8 @@ def _unit_metadata(text: str) -> tuple[str, int]:
         return "millions", 1_000_000
     if "in thousands" in lowered:
         return "thousands", 1_000
+    if re.search(r"(?:£|\$|€)\s*m\b", text, flags=re.I):
+        return "millions", 1_000_000
     return "units", 1
 
 
@@ -194,6 +218,12 @@ def _canonical_name(
         if normalized in {_normalize(alias) for alias in aliases}:
             return row_name
     if statement_name == "income_statement":
+        if normalized.startswith("group operating profit"):
+            return "operating_income"
+        if normalized.startswith("profit/(loss) before taxation"):
+            return "pretax_income"
+        if normalized.startswith("profit/(loss) for the year attributable"):
+            return "net_income"
         if normalized_section == "earnings per share" and normalized in {"basic", "diluted"}:
             return f"{normalized}_eps"
         if normalized.startswith("net income attributable to"):
@@ -206,7 +236,25 @@ def _canonical_name(
             return "basic_eps"
         if normalized == "diluted earnings per share":
             return "diluted_eps"
+    if statement_name == "cash_flow_statement" and normalized.startswith(
+        "purchases of property, plant and equipment"
+    ):
+        return "capital_expenditure"
     return None
+
+
+def _analysis_values(
+    statement_name: str, canonical: str | None, values: list[float]
+) -> list[float]:
+    if statement_name == "balance_sheet" and canonical in {
+        "current_liabilities",
+        "total_liabilities",
+        "total_debt",
+        "term_debt",
+        "commercial_paper",
+    }:
+        return [abs(value) for value in values]
+    return values
 
 
 def _is_section(line: str) -> bool:
@@ -237,7 +285,7 @@ def _line_value_tokens(line: str) -> list[tuple[int, int, float]]:
     tokens: list[tuple[int, int, float]] = []
     for match in _NUMBER_PATTERN.finditer(line):
         tokens.append((match.start(), match.end(), _parse_number(match.group())))
-    if not tokens and line.strip() in _DASHES:
+    if not tokens and line.strip() in {*_DASHES, "-)", "(-)", "--)"}:
         tokens.append((0, len(line), 0.0))
     return tokens
 
@@ -259,6 +307,8 @@ def _extract_complete_rows(
     lines: list[str],
     periods: tuple[str, ...],
     page: int,
+    extraction_method: str = "deterministic",
+    confidence: float = 1.0,
 ) -> tuple[dict[str, StatementRow], tuple[str, ...]]:
     """Retain every label/value row in PDF order, not only known KPI rows."""
     rows: dict[str, StatementRow] = {}
@@ -269,22 +319,38 @@ def _extract_complete_rows(
     evidence_parts: list[str] = []
     period_count = len(periods)
     last_period_index = max(
-        (index for index, line in enumerate(lines[:30]) if _normalize(line) in periods),
+        (
+            index
+            for index, line in enumerate(lines[:30])
+            if re.fullmatch(r"(?:19|20)\d{2}\W*", line.strip())
+        ),
         default=0,
     )
+    header = " ".join(lines[: min(len(lines), last_period_index + 10)]).casefold()
+    group_and_company_columns = "group" in header and "company" in header
+    has_notes_column = "notes" in header
 
     def finalize() -> None:
         nonlocal label_parts, pending_values, evidence_parts
         label = " ".join(label_parts).strip(" .")
-        if label and len(pending_values) == period_count:
+        selected_values = pending_values
+        if group_and_company_columns and len(pending_values) >= period_count * 2:
+            all_entity_values = pending_values[-(period_count * 2) :]
+            selected_values = all_entity_values[:period_count]
+        elif len(pending_values) >= period_count:
+            selected_values = pending_values[-period_count:]
+        if label and len(selected_values) == period_count:
             canonical = _canonical_name(statement_name, label, section)
+            selected_values = _analysis_values(statement_name, canonical, selected_values)
             key = _unique_key(rows, canonical or _slug(label), section)
             rows[key] = StatementRow(
                 name=key,
-                values=dict(zip(periods, pending_values)),
+                values=dict(zip(periods, selected_values)),
                 evidence=Evidence(page, " ".join(evidence_parts)[:500]),
                 label=label,
                 section=section,
+                extraction_method=extraction_method,
+                confidence=confidence,
             )
         label_parts = []
         pending_values = []
@@ -295,10 +361,16 @@ def _extract_complete_rows(
         if not compact or compact == "$":
             continue
         normalized = _normalize(compact)
+        tokens = _line_value_tokens(compact)
+        if normalized in {"notes", "group", "company"} or re.fullmatch(
+            r"[£$€]\s*m\W*", compact, flags=re.I
+        ):
+            continue
+        if not any(character.isalnum() for character in compact) and not tokens:
+            continue
         if normalized.startswith("see accompanying notes"):
             finalize()
             break
-        tokens = _line_value_tokens(compact)
         if _is_section(compact) and not tokens:
             finalize()
             section = compact.rstrip(":")
@@ -307,6 +379,15 @@ def _extract_complete_rows(
             continue
 
         if tokens:
+            if group_and_company_columns or has_notes_column:
+                prefix = compact[: tokens[0][0]].strip(" $.")
+                if prefix and any(character.isalpha() for character in prefix):
+                    if pending_values:
+                        finalize()
+                    label_parts.append(prefix)
+                pending_values.extend(token[2] for token in tokens)
+                evidence_parts.append(compact)
+                continue
             trailing_text = compact[tokens[-1][1] :].strip(" ,.;:)]}")
             if trailing_text and any(character.isalpha() for character in trailing_text):
                 if pending_values:
@@ -316,7 +397,11 @@ def _extract_complete_rows(
                 continue
             if len(tokens) >= period_count:
                 finalize()
-                selected = tokens[-period_count:]
+                if group_and_company_columns and len(tokens) >= period_count * 2:
+                    offset = 1 if has_notes_column and len(tokens) > period_count * 2 else 0
+                    selected = tokens[offset : offset + period_count]
+                else:
+                    selected = tokens[-period_count:]
                 prefix = compact[: selected[0][0]].strip(" $.")
                 if prefix:
                     label_parts.append(prefix)
@@ -329,9 +414,13 @@ def _extract_complete_rows(
                     label_parts.append(prefix)
                 pending_values.extend(token[2] for token in tokens)
                 evidence_parts.append(compact)
-                if len(pending_values) == period_count:
+                if len(pending_values) == period_count and not (
+                    group_and_company_columns or has_notes_column
+                ):
                     finalize()
-                elif len(pending_values) > period_count:
+                elif len(pending_values) > period_count and not (
+                    group_and_company_columns or has_notes_column
+                ):
                     pending_values = pending_values[-period_count:]
                     finalize()
             continue
@@ -366,7 +455,13 @@ def _row_values(
     return dict(zip(periods, aggregate)), " | ".join(evidence_parts)[:500]
 
 
-def _extract_eps(lines: list[str], periods: tuple[str, ...], page: int) -> dict[str, StatementRow]:
+def _extract_eps(
+    lines: list[str],
+    periods: tuple[str, ...],
+    page: int,
+    extraction_method: str = "deterministic",
+    confidence: float = 1.0,
+) -> dict[str, StatementRow]:
     rows: dict[str, StatementRow] = {}
     section = next(
         (index for index, line in enumerate(lines) if _normalize(line) == "earnings per share"),
@@ -394,6 +489,8 @@ def _extract_eps(lines: list[str], periods: tuple[str, ...], page: int) -> dict[
                 Evidence(page, " ".join(lines[index : index + len(periods) + 4])[:500]),
                 label=name.title(),
                 section="Earnings per share",
+                extraction_method=extraction_method,
+                confidence=confidence,
             )
     return rows
 
@@ -408,7 +505,14 @@ def extract_statements(pages: Iterable[PageText]) -> dict[str, FinancialStatemen
         periods = _periods(lines)
         if not periods:
             continue
-        rows, sections = _extract_complete_rows(statement_name, lines, periods, page.number)
+        rows, sections = _extract_complete_rows(
+            statement_name,
+            lines,
+            periods,
+            page.number,
+            page.method,
+            page.confidence,
+        )
         # Fall back to canonical targeted extraction if a difficult OCR layout misses a row.
         for row_name, aliases in _ROW_ALIASES[statement_name].items():
             if row_name in rows:
@@ -416,14 +520,27 @@ def extract_statements(pages: Iterable[PageText]) -> dict[str, FinancialStatemen
             extracted = _row_values(lines, aliases, periods)
             if extracted:
                 values, evidence_text = extracted
+                normalized_values = _analysis_values(
+                    statement_name,
+                    row_name,
+                    [values[period] for period in periods],
+                )
                 rows[row_name] = StatementRow(
                     row_name,
-                    values,
+                    dict(zip(periods, normalized_values)),
                     Evidence(page.number, evidence_text),
                     label=aliases[0],
+                    extraction_method=page.method,
+                    confidence=page.confidence,
                 )
         if statement_name == "income_statement":
-            for row_name, row in _extract_eps(lines, periods, page.number).items():
+            for row_name, row in _extract_eps(
+                lines,
+                periods,
+                page.number,
+                page.method,
+                page.confidence,
+            ).items():
                 rows.setdefault(row_name, row)
         if statement_name == "balance_sheet" and any(
             _canonical_name(statement_name, row.label) == "term_debt"
@@ -444,6 +561,8 @@ def extract_statements(pages: Iterable[PageText]) -> dict[str, FinancialStatemen
                 total_debt_values,
                 Evidence(page.number, "Derived from commercial paper and term debt."),
                 label="Total debt",
+                extraction_method=f"derived_from:{page.method}",
+                confidence=page.confidence,
             )
         unit, scale = _unit_metadata(page.text)
         candidate = FinancialStatement(
@@ -455,8 +574,32 @@ def extract_statements(pages: Iterable[PageText]) -> dict[str, FinancialStatemen
             unit_scale=scale,
             page=page.number,
             sections=sections,
+            extraction_method=page.method,
+            confidence=page.confidence,
         )
         existing = statements.get(statement_name)
-        if existing is None or len(candidate.rows) > len(existing.rows):
+        is_continuation = "continued" in page.text[:300].casefold()
+        if (
+            existing is not None
+            and is_continuation
+            and existing.periods == candidate.periods
+            and page.number - existing.page <= 2
+        ):
+            merged_rows = dict(existing.rows)
+            for key, row in candidate.rows.items():
+                merged_rows[_unique_key(merged_rows, key, row.section)] = row
+            statements[statement_name] = FinancialStatement(
+                name=existing.name,
+                periods=existing.periods,
+                rows=merged_rows,
+                currency=existing.currency if existing.currency != "unknown" else candidate.currency,
+                unit=existing.unit if existing.unit != "units" else candidate.unit,
+                unit_scale=max(existing.unit_scale, candidate.unit_scale),
+                page=existing.page,
+                sections=tuple(dict.fromkeys((*existing.sections, *candidate.sections))),
+                extraction_method=existing.extraction_method,
+                confidence=min(existing.confidence, candidate.confidence),
+            )
+        elif existing is None or len(candidate.rows) > len(existing.rows):
             statements[statement_name] = candidate
     return statements
