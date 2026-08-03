@@ -106,6 +106,35 @@ class RiskFinding:
 
 
 @dataclass(frozen=True)
+class FinancialInsight:
+    code: str
+    title: str
+    category: str
+    priority: str
+    sentiment: str
+    current_period: str
+    prior_period: str
+    narrative: str
+    business_meaning: str
+    investigation: str
+    related_metrics: tuple[str, ...]
+    related_risks: tuple[str, ...] = ()
+    evidence: tuple[Evidence, ...] = ()
+
+
+@dataclass(frozen=True)
+class AugmentedInsight:
+    title: str
+    priority: str
+    narrative: str
+    business_meaning: str
+    investigation: str
+    related_metrics: tuple[str, ...]
+    related_risks: tuple[str, ...] = ()
+    evidence_pages: tuple[int, ...] = ()
+
+
+@dataclass(frozen=True)
 class ValidationResult:
     name: str
     period: str
@@ -126,12 +155,15 @@ class AnalysisResult:
     financial_facts: dict[str, FinancialFact] = field(default_factory=dict)
     financial_movements: list[FinancialMovement] = field(default_factory=list)
     risk_findings: list[RiskFinding] = field(default_factory=list)
+    financial_insights: list[FinancialInsight] = field(default_factory=list)
+    augmented_insights: list[AugmentedInsight] = field(default_factory=list)
     period_ratios: dict[str, dict[str, Ratio]] = field(default_factory=dict)
     validations: list[ValidationResult] = field(default_factory=list)
     summary: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     extraction_mode: str = "rules_only"
     model_used: str | None = None
+    insight_model_used: str | None = None
     generated_at: str = field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )

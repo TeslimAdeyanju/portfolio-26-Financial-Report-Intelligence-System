@@ -33,6 +33,9 @@ def test_marks_immaterial_and_context_dependent_movements() -> None:
             "capital_expenditure": _fact(
                 "capital_expenditure", {"2025": -20, "2024": -10}
             ),
+            "financing_cash_flow": _fact(
+                "financing_cash_flow", {"2025": 20, "2024": -10}
+            ),
             "missing": FinancialFact(
                 name="missing",
                 category="Test",
@@ -47,6 +50,8 @@ def test_marks_immaterial_and_context_dependent_movements() -> None:
     assert by_name["revenue"].direction == "stable"
     assert by_name["revenue"].assessment == "stable"
     assert by_name["capital_expenditure"].assessment == "contextual"
+    assert by_name["financing_cash_flow"].direction == "turnaround"
+    assert by_name["financing_cash_flow"].assessment == "contextual"
     assert "missing" not in by_name
 
 

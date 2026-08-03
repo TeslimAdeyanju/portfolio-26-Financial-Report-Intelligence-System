@@ -202,6 +202,10 @@ with `brew install tesseract` on macOS or through your operating system's packag
 - Deterministic favorable, adverse, stable, turnaround, deterioration, and contextual assessments
 - Evidence-linked profitability, liquidity, solvency, cash-flow, performance, and reporting risk flags
 - Transparent severity thresholds, observed trigger values, implications, and suggested review actions
+- Ranked, evidence-linked management insights explaining movements and their financial meaning
+- Investigation prompts that avoid presenting unverified business drivers as facts
+- Optional local `phi3:mini` consolidation into connected management themes, with `llama3.1:8b` selectable on higher-memory or slower workflows
+- Post-model verification of figures, metrics, risk codes, evidence pages, and causal language
 
 ## Extraction Development Checkpoint
 
@@ -305,6 +309,39 @@ The next implementation milestone is to benchmark live GLM-OCR output against Ap
 and Colgate, tune the page prompts and table normalization where required, and record
 deterministic-versus-model row accuracy and processing time.
 
+## Insight Intelligence Milestone - 3 August 2026
+
+Agents 05, 06, and 07 now form a traceable financial interpretation workflow after statement
+extraction and calculation:
+
+```text
+Validated facts and ratios
+  → adjacent-period trend and variance analysis
+  → deterministic financial risk assessment
+  → evidence-grounded insight generation
+  → optional local-model management-theme synthesis
+  → post-model numerical and provenance verification
+```
+
+Agent 05 classifies multi-period movements as favorable, adverse, stable, turnaround,
+deterioration, or contextual. Agent 07 applies transparent profitability, liquidity, solvency,
+cash-flow, performance, and reporting-quality risk thresholds. Agent 06 ranks the resulting
+insights and groups them into profitability, cash-flow, liquidity, leverage, and shareholder-
+return themes before any language model is called.
+
+The optional narrative layer uses `phi3:mini` by default on the 8 GB M2. A live Amazon 2025
+test produced five verified management themes covering cash generation and investment, capital
+structure and leverage, liquidity and working capital, growth and profitability, and shareholder
+returns and efficiency. The model connected operating cash-flow growth with the free-cash-flow
+decline and balanced debt growth against the change in debt-to-equity.
+
+Two live `llama3.1:8b` attempts exceeded the practical local timeout, so it remains selectable
+for higher-memory or deliberately slower workflows rather than being the default. Model output
+cannot change calculations, priorities, metrics, risks, or evidence. Python rejects invented
+figures and unsupported causal claims, restores any omitted validated metric sentence, strips
+unverified currency symbols, and retains deterministic insights whenever augmentation is
+unavailable or invalid. The complete automated suite contains 37 passing tests.
+
 ## Development Update - 2 August 2026
 
 Today’s work strengthened the financial-statement extraction foundation and made the project
@@ -334,7 +371,7 @@ easier to continue in a future development session.
 | Amazon | 23 | 26 | 29 | 10/10 passed |
 | Colgate | 17 | 31 | 33 | 15/15 passed |
 
-The automated suite now contains 27 passing tests, including provider, table-normalization,
+The automated suite now contains 37 passing tests, including provider, table-normalization,
 page-rendering, provenance, and safe-fallback coverage. Live Colgate model-assisted extraction
 processed the three primary statements in 419 seconds on the 8 GB M2 and retained 17 income,
 31 balance-sheet, and 33 cash-flow rows with all 15 validations passing.
@@ -384,7 +421,7 @@ and the two-page `Statements of cash flows`; selected Group rather than Company 
 returned 17/21 canonical facts in approximately 0.35 seconds without model assistance. Missing
 facts remained explicit rather than being inferred from narrative notes.
 
-The complete automated suite contains 27 passing tests. Full two-pass Apple OCR and analysis
+The complete automated suite contains 37 passing tests. Full two-pass Apple OCR and analysis
 completes in approximately 48 seconds on the development machine; text-native Amazon and
 Colgate reports complete in approximately one second each.
 
@@ -397,7 +434,7 @@ Colgate reports complete in approximately one second each.
 | Financial Calculation Engine | Implemented |
 | Data Quality Agent | Implemented |
 | Financial Analysis Agent | Implemented |
-| Insight Generation Agent | Planned folder ready |
+| Insight Generation Agent | Implemented |
 | Risk Assessment Agent | Implemented |
 | Visual Blueprint Agent | Planned folder ready |
 | Narrative Synthesis Agent | Baseline implemented |
@@ -415,6 +452,7 @@ Colgate reports complete in approximately one second each.
 - Executive summary ✅
 - Multi-period trend and variance analysis ✅
 - Evidence-linked financial risk assessment ✅
+- Evidence-grounded management insight generation ✅
 - JSON export ✅
 
 ### Version 2

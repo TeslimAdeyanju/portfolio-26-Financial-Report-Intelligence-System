@@ -75,13 +75,24 @@ selected_mode = mode_labels[selected_mode_label]
 with st.expander("Local model settings"):
     ollama_url = st.text_input("Ollama URL", value="http://127.0.0.1:11434")
     model_name = st.text_input("Vision model", value="glm-ocr:latest")
+    augment_insights = st.checkbox(
+        "Augment insights with a local narrative model",
+        value=True,
+        help="Consolidates validated deterministic insights into management themes.",
+    )
+    narrative_model_name = st.text_input("Narrative model", value="phi3:mini")
     if st.button("Check model connection"):
-        status = FinancialReportPipeline(
+        status_pipeline = FinancialReportPipeline(
             extraction_mode=selected_mode,
             ollama_url=ollama_url,
             model_name=model_name,
-        ).model_status()
-        (st.success if status.available else st.error)(status.detail)
+            narrative_model_name=narrative_model_name,
+        )
+        vision_status = status_pipeline.model_status()
+        (st.success if vision_status.available else st.error)(vision_status.detail)
+        if augment_insights:
+            narrative_status = status_pipeline.narrative_model_status()
+            (st.success if narrative_status.available else st.error)(narrative_status.detail)
 
 uploaded = st.file_uploader("Financial report", type=["pdf"])
 if uploaded and st.button("Analyse report", type="primary"):
@@ -91,6 +102,8 @@ if uploaded and st.button("Analyse report", type="primary"):
                 extraction_mode=selected_mode,
                 ollama_url=ollama_url,
                 model_name=model_name,
+                augment_insights=augment_insights,
+                narrative_model_name=narrative_model_name,
             ).analyze(uploaded.getvalue(), uploaded.name)
         payload = result.to_dict()
         st.session_state["analysis"] = payload
@@ -101,7 +114,8 @@ if payload := st.session_state.get("analysis"):
     model_label = payload.get("model_used") or "not used"
     st.caption(
         f"Extraction mode: {payload.get('extraction_mode', 'rules_only')} · "
-        f"Model: {model_label}"
+        f"Extraction model: {model_label} · "
+        f"Insight model: {payload.get('insight_model_used') or 'not used'}"
     )
     for warning in payload["warnings"]:
         st.warning(warning)
@@ -110,9 +124,10 @@ if payload := st.session_state.get("analysis"):
     for statement in payload["summary"]:
         st.write(f"• {statement}")
 
-    fact_tab, analysis_tab, risk_tab, statement_tab, ratio_tab, validation_tab, evidence_tab = st.tabs(
+    fact_tab, insight_tab, analysis_tab, risk_tab, statement_tab, ratio_tab, validation_tab, evidence_tab = st.tabs(
         [
             "Key Financial Facts",
+            "Insights",
             "Analysis",
             "Risks",
             "Full Statements",
@@ -146,7 +161,7 @@ if payload := st.session_state.get("analysis"):
                         for period in periods
                     },
                     "currency / unit": f"{fact['currency']} {fact['unit']}",
-                    "page": fact["evidence"]["page"] if fact.get("evidence") else "",
+                    "page": str(fact["evidence"]["page"]) if fact.get("evidence") else "",
                     "method": fact["extraction_method"],
                     "confidence": f"{fact['confidence']:.0%}",
                 }
@@ -168,6 +183,75 @@ if payload := st.session_state.get("analysis"):
                 width="stretch",
                 hide_index=True,
             )
+    with insight_tab:
+        insights = payload.get("financial_insights", [])
+        if not insights:
+            if "financial_insights" not in payload:
+                st.warning(
+                    "This result was generated before Insight Generation was enabled. "
+                    "Click Analyse report again to regenerate it."
+                )
+            elif not payload.get("financial_movements"):
+                st.info(
+                    "No comparable period movements were available. Insights require at "
+                    "least two reporting periods for one or more extracted facts or ratios."
+                )
+            else:
+                st.info(
+                    "Comparable movements were found, but none qualified as a key insight. "
+                    "Stable and context-dependent movements are intentionally excluded."
+                )
+        else:
+            augmented = payload.get("augmented_insights", [])
+            displayed_insights = augmented or insights
+            high = sum(item["priority"] == "high" for item in displayed_insights)
+            adverse = sum(item.get("sentiment") == "adverse" for item in displayed_insights)
+            favorable = sum(item.get("sentiment") == "favorable" for item in displayed_insights)
+            if augmented:
+                st.success(
+                    f"Management themes augmented and verified using "
+                    f"{payload.get('insight_model_used')}."
+                )
+            elif payload.get("insight_model_used") is None:
+                st.caption("Showing deterministic insights.")
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Management themes" if augmented else "Key insights", len(displayed_insights))
+            col2.metric("High priority", high)
+            if augmented:
+                col3.metric(
+                    "Risk-linked",
+                    sum(bool(item.get("related_risks")) for item in displayed_insights),
+                )
+                col4.metric(
+                    "Evidence-linked",
+                    sum(bool(item.get("evidence_pages")) for item in displayed_insights),
+                )
+            else:
+                col3.metric("Adverse", adverse)
+                col4.metric("Favorable", favorable)
+            for item in displayed_insights:
+                priority = item["priority"].upper()
+                with st.expander(f"{priority} · {item['title']}", expanded=item["priority"] == "high"):
+                    st.write(item["narrative"])
+                    st.markdown(f"**Why it matters:** {item['business_meaning']}")
+                    st.markdown(f"**Investigate:** {item['investigation']}")
+                    details = ""
+                    if not augmented:
+                        details = (
+                            f"Comparison: {item['current_period']} vs {item['prior_period']} · "
+                            f"Assessment: {item['sentiment']}"
+                        )
+                    elif item.get("related_metrics"):
+                        details = f"Metrics: {', '.join(item['related_metrics'])}"
+                    if item.get("related_risks"):
+                        details += (" · " if details else "") + f"Linked risks: {', '.join(item['related_risks'])}"
+                    if augmented and item.get("evidence_pages"):
+                        details += (" · " if details else "") + "Source page(s): " + ", ".join(str(page) for page in item["evidence_pages"])
+                    elif item.get("evidence"):
+                        pages = sorted({str(evidence['page']) for evidence in item['evidence']})
+                        details += f" · Source page(s): {', '.join(pages)}"
+                    if details:
+                        st.caption(details)
     with analysis_tab:
         movements = payload.get("financial_movements", [])
         if not movements:
@@ -198,7 +282,7 @@ if payload := st.session_state.get("analysis"):
                         "direction": item["direction"],
                         "assessment": item["assessment"],
                         "rationale": item["rationale"],
-                        "page": item["evidence"]["page"] if item.get("evidence") else "",
+                        "page": str(item["evidence"]["page"]) if item.get("evidence") else "",
                     }
                     for item in movements
                 ],
@@ -229,7 +313,7 @@ if payload := st.session_state.get("analysis"):
                         "trigger": item["trigger"],
                         "implication": item["implication"],
                         "suggested action": item["suggested_action"],
-                        "page": item["evidence"]["page"] if item.get("evidence") else "",
+                        "page": str(item["evidence"]["page"]) if item.get("evidence") else "",
                     }
                     for item in risks
                 ],

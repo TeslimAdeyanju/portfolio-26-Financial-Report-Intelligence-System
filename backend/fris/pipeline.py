@@ -29,6 +29,14 @@ from .agents.agent_03_financial_calculation_engine import (
 )
 from .agents.agent_04_data_quality import validate_financials
 from .agents.agent_05_financial_analysis import analyze_financial_performance
+from .agents.agent_06_insight_generation import (
+    DEFAULT_NARRATIVE_MODEL,
+    InsightNarrativeProvider,
+    NarrativeAugmentationError,
+    OllamaNarrativeProvider,
+    augment_financial_insights,
+    generate_financial_insights,
+)
 from .agents.agent_07_risk_assessment import assess_financial_risks
 from .agents.agent_09_narrative_synthesis import generate_summary
 from .models import AnalysisResult, Metric
@@ -89,6 +97,10 @@ class FinancialReportPipeline:
         model_name: str = DEFAULT_GLM_OCR_MODEL,
         model_timeout: float = 300,
         model_dpi: int = 144,
+        augment_insights: bool = False,
+        narrative_provider: InsightNarrativeProvider | None = None,
+        narrative_model_name: str = DEFAULT_NARRATIVE_MODEL,
+        narrative_timeout: float = 600,
     ) -> None:
         try:
             self.extraction_mode = ExtractionMode(extraction_mode)
@@ -101,9 +113,18 @@ class FinancialReportPipeline:
             timeout=model_timeout,
         )
         self.model_dpi = model_dpi
+        self.augment_insights = augment_insights
+        self.narrative_provider = narrative_provider or OllamaNarrativeProvider(
+            base_url=ollama_url,
+            model=narrative_model_name,
+            timeout=narrative_timeout,
+        )
 
     def model_status(self) -> ModelStatus:
         return self.model_provider.status()
+
+    def narrative_model_status(self) -> ModelStatus:
+        return self.narrative_provider.status()
 
     @staticmethod
     def _needs_model_assistance(statements, validations) -> bool:
@@ -188,6 +209,29 @@ class FinancialReportPipeline:
         risk_findings = assess_financial_risks(
             financial_facts, period_ratios, financial_movements, validations
         )
+        financial_insights = generate_financial_insights(
+            financial_movements, risk_findings
+        )
+        augmented_insights = []
+        insight_model_used: str | None = None
+        if self.augment_insights and financial_insights:
+            narrative_status = self.narrative_provider.status()
+            if not narrative_status.available:
+                warnings.append(
+                    f"Insight augmentation was requested but unavailable: "
+                    f"{narrative_status.detail} Deterministic insights were retained."
+                )
+            else:
+                try:
+                    augmented_insights = augment_financial_insights(
+                        financial_insights, risk_findings, self.narrative_provider
+                    )
+                    insight_model_used = narrative_status.model
+                except NarrativeAugmentationError as exc:
+                    warnings.append(
+                        f"Insight augmentation was rejected by verification: {exc} "
+                        "Deterministic insights were retained."
+                    )
         if not metrics:
             warnings.append(
                 "No supported metrics were confidently extracted from the document text."
@@ -201,10 +245,13 @@ class FinancialReportPipeline:
             financial_facts=financial_facts,
             financial_movements=financial_movements,
             risk_findings=risk_findings,
+            financial_insights=financial_insights,
+            augmented_insights=augmented_insights,
             period_ratios=period_ratios,
             validations=validations,
             summary=generate_summary(metrics, ratios),
             warnings=warnings,
             extraction_mode=self.extraction_mode.value,
             model_used=model_used,
+            insight_model_used=insight_model_used,
         )

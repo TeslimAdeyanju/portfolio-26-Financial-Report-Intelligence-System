@@ -72,12 +72,14 @@ def _change(current: float, prior: float) -> tuple[float, float | None, str]:
 def _assessment(direction: str, policy: AnalysisPolicy | None) -> tuple[str, str]:
     if direction == "stable":
         return "stable", "the movement was below the 1% materiality threshold"
-    if direction == "turnaround":
-        return "favorable", "the value moved from non-positive to positive"
-    if direction == "deterioration":
-        return "adverse", "the value moved from non-negative to negative"
     if policy is None:
         return "contextual", "the movement requires business and industry context"
+    if direction == "turnaround":
+        assessment = "favorable" if policy.preference == "higher" else "adverse"
+        return assessment, "the value moved from non-positive to positive"
+    if direction == "deterioration":
+        assessment = "adverse" if policy.preference == "higher" else "favorable"
+        return assessment, "the value moved from non-negative to negative"
     favorable = (direction == "increased" and policy.preference == "higher") or (
         direction == "decreased" and policy.preference == "lower"
     )
